@@ -357,7 +357,8 @@ class ChromecastService extends BaseService {
   void handleReceiverStatus(Map payload) {
     // log.i("_handleReceiverStatus()");
     if (null == mediaChannel &&
-        true == payload['status']?.containsKey('applications')) {
+        true == payload['status']?.containsKey('applications') &&
+        castSession != null) {
       // re-create the channel with the transportId the chromecast just sent us
       if (!castSession!.isConnected) {
         castSession = castSession!
