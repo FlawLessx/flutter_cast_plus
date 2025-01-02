@@ -18,8 +18,12 @@ class _ScanDialogState extends State<ScanDialog> {
   }
 
   Future<void> scanDevices() async {
-    devices = await FlutterClassPlusPlugin().scanDevices();
-    setState(() {});
+    devices = await FlutterClassPlusPlugin().scanDevices(
+      types: [CastDeviceType.chromeCast],
+    );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -32,8 +36,21 @@ class _ScanDialogState extends State<ScanDialog> {
           final device = devices[index];
 
           return ListTile(
-            onTap: () {
-              Navigator.pop(context, device);
+            onTap: () async {
+              final connected = await device.service.connect();
+
+              if (connected) {
+                await device.service.launch();
+                // ignore: use_build_context_synchronously
+                return Navigator.pop(context, device);
+              } else {
+                // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to connect'),
+                  ),
+                );
+              }
             },
             title: Text(device.friendlyName ?? ''),
             subtitle: Text(device.host ?? ''),

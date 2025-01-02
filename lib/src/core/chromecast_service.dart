@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_cast_plus/src/model/cast_completer.dart';
 import 'package:flutter_cast_plus/src/model/cast_media_status.dart';
 import 'package:flutter_cast_plus/src/model/cast_session.dart';
@@ -22,20 +23,19 @@ class ChromecastService extends BaseService {
   ChromecastService({required super.device});
 
   @override
-  Future<void> connect() async {
+  Future<bool> connect() async {
+    logger.i('connect chromecast device: ${device.name}');
+
     connectionDidClose = false;
 
     castSession ??= CastSession(
         sourceId: 'client-${Random().nextInt(99999)}',
         destinationId: 'receiver-0');
 
-    final completer = Completer();
-    queueRequests.add(CastCompleter(requestId, completer));
-
     // connect to socket
     if (null == await createSocket()) {
-      // log.w('Could not create socket');
-      return completer.completeError(Exception('Could not create socket'));
+      logger.e('Could not create socket');
+      return false;
     }
 
     connectionChannel!.sendMessageChromecast({'type': 'CONNECT'}, requestId);
@@ -44,7 +44,25 @@ class ChromecastService extends BaseService {
     // start heartbeat
     heartbeatTick();
 
-    return completer.future;
+    return true;
+  }
+
+  @override
+  Future<void> launch({String? appId}) async {
+    logger.d('connectionChannel: $connectionChannel');
+
+    if (connectionChannel != null) {
+      final completer = Completer();
+      queueRequests.add(CastCompleter(requestId, completer));
+      receiverChannel!.sendMessageChromecast(
+        {
+          'type': 'LAUNCH',
+          'appId': appId ?? 'CC1AD845',
+        },
+        requestId,
+      );
+      requestId++;
+    }
   }
 
   @override
@@ -67,19 +85,19 @@ class ChromecastService extends BaseService {
       try {
         castSessionController.add(castSession);
       } catch (e) {
-        logger.warning(
+        logger.e(
             "Could not add the CastSession to the CastSession Stream Controller: events will not be triggered");
-        logger.warning(e.toString());
-        logger.info("Closed? ${castSessionController.isClosed}");
+        logger.e(e.toString());
+        logger.i("Closed? ${castSessionController.isClosed}");
       }
 
       try {
         castMediaStatusController.add(castSession!.castMediaStatus);
       } catch (e) {
-        logger.warning(
+        logger.e(
             "Could not add the CastMediaStatus to the CastSession Stream Controller: events will not be triggered");
-        logger.warning(e.toString());
-        logger.info("Closed? ${castMediaStatusController.isClosed}");
+        logger.e(e.toString());
+        logger.i("Closed? ${castMediaStatusController.isClosed}");
       }
     }
     return didReconnect;
@@ -106,6 +124,8 @@ class ChromecastService extends BaseService {
 
   @override
   Future<void> dispose() async {
+    logger.d('Disposing chromecast service');
+
     socket = null;
     heartbeatChannel = null;
     connectionChannel = null;
@@ -119,11 +139,14 @@ class ChromecastService extends BaseService {
   Future<SecureSocket?> createSocket() async {
     if (null == socket) {
       try {
-        // log.d('Connecting to ${device.host}:${device.port}');
+        logger.i('Connecting to ${device.host}:${device.port}');
 
-        socket = await SecureSocket.connect(device.host, device.port!,
-            onBadCertificate: (X509Certificate certificate) => true,
-            timeout: const Duration(seconds: 10));
+        socket = await SecureSocket.connect(
+          device.host,
+          device.port!,
+          onBadCertificate: (X509Certificate certificate) => true,
+          timeout: const Duration(seconds: 10),
+        );
 
         connectionChannel = ConnectionChannel.create(
           socket,
@@ -131,16 +154,20 @@ class ChromecastService extends BaseService {
           destinationId: castSession!.destinationId,
           namespace: namespace,
         );
-        heartbeatChannel = HeartbeatChannel.create(socket,
-            sourceId: castSession!.sourceId,
-            destinationId: castSession!.destinationId);
-        receiverChannel = ReceiverChannel.create(socket,
-            sourceId: castSession!.sourceId,
-            destinationId: castSession!.destinationId);
+        heartbeatChannel = HeartbeatChannel.create(
+          socket,
+          sourceId: castSession!.sourceId,
+          destinationId: castSession!.destinationId,
+        );
+        receiverChannel = ReceiverChannel.create(
+          socket,
+          sourceId: castSession!.sourceId,
+          destinationId: castSession!.destinationId,
+        );
 
         socket!.listen(onSocketData, onDone: dispose);
       } catch (e) {
-        // log.d(e.toString());
+        logger.e(e);
         return null;
       }
     }
@@ -237,10 +264,10 @@ class ChromecastService extends BaseService {
 
   @override
   Future<void> setActiveTracksIds(List<int> trackIds) async {
-    Map<String, dynamic> trackInfoMap = {
+    Map<String, dynamic> trackiMap = {
       "activeTrackIds": trackIds,
     };
-    return await _castMediaAction('EDIT_TRACKS_INFO', trackInfoMap);
+    return await _castMediaAction('EDIT_TRACKS_i', trackiMap);
   }
 
   @override
@@ -296,7 +323,21 @@ class ChromecastService extends BaseService {
     Map<String, dynamic> payloadMap = jsonDecode(message.payloadUtf8);
 
     if ('PING' != payloadMap['type'] && 'PONG' != payloadMap['type']) {
-      logger.info(message.payloadUtf8);
+      if (kDebugMode) {
+        logger.d('onSocket data: $payloadMap');
+      }
+
+      try {
+        final castCompleter = queueRequests
+            .where((element) => element.requestId == payloadMap['requestId'])
+            .firstOrNull;
+        // logger.i('completer id complete: ${castCompleter?.requestId}');
+        castCompleter?.completer.complete();
+        queueRequests.removeWhere(
+            (element) => element.requestId == payloadMap['requestId']);
+      } catch (e) {
+        logger.e(e);
+      }
     }
 
     if ('CLOSE' == payloadMap['type']) {
@@ -341,9 +382,9 @@ class ChromecastService extends BaseService {
         try {
           castSessionController.add(castSession);
         } catch (e) {
-          logger.warning(
+          logger.e(
               "Could not add the CastSession to the CastSession Stream Controller: events will not be triggered");
-          logger.warning(e.toString());
+          logger.e(e.toString());
         }
       }
     }
@@ -390,23 +431,13 @@ class ChromecastService extends BaseService {
         try {
           castMediaStatusController.add(castSession!.castMediaStatus);
         } catch (e) {
-          logger.warning(
+          logger.e(
               "Could not add the CastMediaStatus to the CastSession Stream Controller: events will not be triggered");
-          logger.warning(e.toString());
-          logger.info("Closed? ${castMediaStatusController.isClosed}");
-        }
-
-        try {
-          final castCompleter = queueRequests.firstWhere(
-              (element) => element.requestId == payload['requestId']);
-          castCompleter.completer.complete();
-          queueRequests.removeWhere(
-              (element) => element.requestId == payload['requestId']);
-        } catch (e) {
-          logger.warning(e);
+          logger.e(e.toString());
+          logger.i("Closed? ${castMediaStatusController.isClosed}");
         }
       } else {
-        logger.info("Media status is empty");
+        logger.i("Media status is empty");
       }
     }
   }

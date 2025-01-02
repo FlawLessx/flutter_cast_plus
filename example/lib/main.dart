@@ -30,6 +30,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   CastDevice? device;
+  final testVideo =
+      'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_1MB.mp4';
 
   @override
   Widget build(BuildContext context) {
@@ -46,11 +48,24 @@ class _MyHomePageState extends State<MyHomePage> {
               Text(
                 'Connected Device: ${device?.friendlyName ?? ''}',
               ),
-              Expanded(
-                child: Column(
-                  children: [],
-                ),
-              )
+              if (device != null)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    device?.service.loadPlaylist(
+                      [
+                        CastMedia(
+                          contentId: testVideo,
+                          title: 'Bib Bug Bunny',
+                          autoPlay: true,
+                        ),
+                      ],
+                    );
+                  },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text(
+                    'Play',
+                  ),
+                )
             ],
           ),
         ),

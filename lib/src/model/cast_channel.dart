@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_cast_plus/src/utils/writer.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 
 import '../proto/cast_channel.pb.dart';
 
 abstract class CastChannel {
-  final log = Logger('CastChannel');
+  final log = Logger();
 
   final Socket? _socket;
   final String? _sourceId;
@@ -42,9 +42,10 @@ abstract class CastChannel {
         Uint32List.fromList(headers.toList()..addAll(bytes.toList()));
 
     if (payload['type'] != 'PING' && payload['type'] != 'GET_STATUS') {
-      log.info("Send message to mediaChannel: ${jsonEncode(payload)}");
+      log.i("Send message to mediaChannel: ${jsonEncode(payload)}");
     }
 
     _socket!.add(fullData);
+    requestId++;
   }
 }

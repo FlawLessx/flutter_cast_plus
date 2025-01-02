@@ -13,7 +13,7 @@ import 'package:flutter_cast_plus/src/model/media_info.dart';
 import 'package:flutter_cast_plus/src/model/queue_data.dart';
 import 'package:flutter_cast_plus/src/model/receiver_channel.dart';
 import 'package:flutter_cast_plus/src/model/track.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 
 abstract class BaseService {
   BaseService({required this.device, this.namespace}) {
@@ -25,7 +25,7 @@ abstract class BaseService {
   final CastDevice device;
   final String? namespace;
 
-  final logger = Logger('CastSender');
+  final logger = Logger();
   SecureSocket? socket;
 
   ConnectionChannel? connectionChannel;
@@ -46,7 +46,8 @@ abstract class BaseService {
   List<CastCompleter> queueRequests = [];
   int requestId = 1;
 
-  Future<void> connect();
+  Future<bool> connect();
+  Future<void> launch();
   Future<void> reconnect({String? sourceId, String? destinationId});
   Future<void> disconnect();
   Future<void> loadPlaylist(List<CastMedia> media,

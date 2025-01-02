@@ -7,10 +7,10 @@ import 'package:flutter_cast_plus/src/core/chromecast_service.dart';
 import 'package:flutter_cast_plus/src/model/cast_device_type_enum.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:logging/logging.dart';
+import 'package:logger/logger.dart';
 
 class CastDevice {
-  final logger = Logger('CastDevice');
+  final logger = Logger();
 
   final String? name;
   final String? type;
@@ -46,14 +46,24 @@ class CastDevice {
   // }
 
   Future<void> initDeviceInfo() async {
+    deviceType = defineCastDeviceType(type ?? '');
+
+    if (deviceType == CastDeviceType.chromeCast) {
+      service = ChromecastService(device: this);
+    }
+    //  else if (deviceType ==  CastDeviceType.appleTV){
+    //    service = ChromecastService(device: this);
+    // }
+
     if (CastDeviceType.chromeCast == deviceType) {
+      googleModelType = defineGoogleCastModelType(modelName ?? '');
       await _initChromecast();
     }
   }
 
   Future<void> _initChromecast() async {
     if (attr != null) {
-      logger.info(attr);
+      logger.i(attr);
     }
 
     if (null != attr && null != attr!['fn']) {
@@ -75,7 +85,7 @@ class CastDevice {
             'https://$host:8443/setup/eureka_info?params=name,device_info');
         http.Response response = await ioClient.get(uri);
         Map deviceInfo = jsonDecode(response.body);
-        logger.info(deviceInfo);
+        logger.i(deviceInfo);
 
         if (deviceInfo['name'] != null && deviceInfo['name'] != 'Unknown') {
           _friendlyName = deviceInfo['name'];
@@ -87,28 +97,18 @@ class CastDevice {
           _modelName = deviceInfo['model_name'];
         }
       } catch (exception) {
-        logger.warning(exception);
+        logger.e(exception);
       }
     }
   }
 
-  CastDeviceType get deviceType => defineCastDeviceType(type ?? '');
+  late CastDeviceType deviceType;
 
   String? get friendlyName => _friendlyName ?? name;
 
   String? get modelName => _modelName;
 
-  GoogleCastModelType get googleModelType =>
-      defineGoogleCastModelType(modelName ?? '');
+  late GoogleCastModelType googleModelType;
 
-  BaseService get service {
-    switch (deviceType) {
-      case CastDeviceType.chromeCast:
-        return ChromecastService(device: this);
-      case CastDeviceType.appleTV:
-        return ChromecastService(device: this);
-      default:
-        throw UnimplementedError();
-    }
-  }
+  late BaseService service;
 }
