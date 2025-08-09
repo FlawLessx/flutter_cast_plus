@@ -267,7 +267,7 @@ class ChromecastService extends BaseService {
     Map<String, dynamic> trackiMap = {
       "activeTrackIds": trackIds,
     };
-    return await _castMediaAction('EDIT_TRACKS_i', trackiMap);
+    return await _castMediaAction('EDIT_TRACKS_INFO', trackiMap);
   }
 
   @override
